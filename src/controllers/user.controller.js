@@ -2,7 +2,6 @@ import asyncHandler from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiErrror.js"
 import { User } from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/cloudnary.js"
-import ApiResponse from "../utils/ApiResponse.js"
 
 
 const register = asyncHandler(async (req, res) => {
@@ -16,7 +15,7 @@ const register = asyncHandler(async (req, res) => {
         throw new ApiError(400, "All field are required")
     }
     // check if user already exist: usernmae, email
-    const existedUser = User.findOne({
+    const existedUser = await User.findOne({
         $or: [
             { userName },
             { email }
@@ -33,37 +32,34 @@ const register = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Avatar files is required")
     }
     // upload them to cloudinary, avatar
-    const avatar = await uploadOnCloudinary(avatarLocalPath)
-    const coverImage = uploadOnCloudinary(coverImageLocalPath)
-    // create user object - crate entry in db
-    if (!avatar) {
-        throw new ApiError(400, "Avatar file is required")
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    if (!coverImage) {
+        console.error("Cover Image upload failed. Response:", coverImage);
+        // Handle the error or throw an exception if needed
     }
 
-    const user = User.create(
-        {
+    if (!avatar) {
+        console.error("Avatar upload failed. Response:", avatar);
+        throw new ApiError(400, "Avatar file is required");
+    }
+
+
+    try {
+        const user = await User.create({
             fullName,
             avatar: avatar.url,
             coverImage: coverImage?.url || "",
             email,
             password,
             userName: userName.toLowerCase()
-        }
-    )
+        });
 
-
-    // remove password and refresh token field from response
-    const createdUser = await User.findById(user._id).select(
-        "-password -refreshToken"
-    )
-    // check for user creation
-    if (!createdUser) {
-        throw new ApiError(500, "Something went wrong while registering the user")
+    } catch (error) {
+        console.error("Error creating user:", error);
     }
-    // return response
-    return res.status(201).json(
-        new ApiResponse(200, createdUser, "User registered successfully")
-    )
+
 })
 
 
